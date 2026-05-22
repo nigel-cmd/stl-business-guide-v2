@@ -1,5 +1,6 @@
 "use client";
 
+import { Suspense } from "react";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -7,7 +8,7 @@ import { Search, MapPin, Star, ArrowLeft } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { BusinessListing } from "@/lib/database.types";
 
-export default function SearchPage() {
+function SearchContent() {
   const searchParams = useSearchParams();
   const [businesses, setBusinesses] = useState<BusinessListing[]>([]);
   const [loading, setLoading] = useState(true);
@@ -75,7 +76,7 @@ export default function SearchPage() {
   }, [query, city, state, category]);
 
   return (
-    <main className="min-h-screen bg-gray-50 pt-20">
+    <>
       {/* Header */}
       <div className="bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -130,7 +131,7 @@ export default function SearchPage() {
           </>
         )}
       </div>
-    </main>
+    </>
   );
 }
 
@@ -188,5 +189,20 @@ function BusinessCard({ business }: { business: BusinessListing }) {
         </div>
       </div>
     </Link>
+  );
+}
+
+export default function SearchPage() {
+  return (
+    <main className="min-h-screen bg-gray-50 pt-20">
+      <Suspense fallback={
+        <div className="text-center py-12">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#54afe6] mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      }>
+        <SearchContent />
+      </Suspense>
+    </main>
   );
 }
