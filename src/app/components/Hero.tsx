@@ -21,7 +21,6 @@ export default function Hero() {
     <section className="relative min-h-screen pt-20 overflow-hidden">
       {/* Background */}
       <div className="absolute inset-0 gradient-hero">
-        <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-10"></div>
         <div className="absolute top-0 right-0 w-1/2 h-full bg-gradient-to-l from-[#bb7ce4]/20 to-transparent"></div>
         <div className="absolute bottom-0 left-0 w-1/2 h-1/2 bg-gradient-to-t from-[#54afe6]/20 to-transparent"></div>
       </div>
