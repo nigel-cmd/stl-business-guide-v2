@@ -3,10 +3,13 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Search, MapPin, Star, TrendingUp, Users } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 export default function Hero() {
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [location, setLocation] = useState("St. Louis, MO");
+  const [isSearching, setIsSearching] = useState(false);
 
   const categories = [
     "Restaurants",
@@ -16,6 +19,21 @@ export default function Hero() {
     "Retail",
     "Automotive",
   ];
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (searchQuery.trim() || location.trim()) {
+      setIsSearching(true);
+      const params = new URLSearchParams();
+      if (searchQuery.trim()) params.set("q", searchQuery.trim());
+      if (location.trim()) {
+        const [city, state] = location.split(",").map(s => s.trim());
+        if (city) params.set("city", city);
+        if (state) params.set("state", state);
+      }
+      router.push(`/search?${params.toString()}`);
+    }
+  };
 
   return (
     <section className="relative min-h-screen pt-20 overflow-hidden">
@@ -51,7 +69,7 @@ export default function Hero() {
             </p>
 
             {/* Search Bar */}
-            <div className="bg-white rounded-2xl p-2 shadow-2xl mb-8">
+            <form onSubmit={handleSearch} className="bg-white rounded-2xl p-2 shadow-2xl mb-8">
               <div className="flex flex-col sm:flex-row gap-2">
                 <div className="flex-1 flex items-center px-4 py-3 bg-gray-50 rounded-xl">
                   <Search className="w-5 h-5 text-gray-400 mr-3" />
@@ -69,20 +87,29 @@ export default function Hero() {
                     type="text"
                     value={location}
                     onChange={(e) => setLocation(e.target.value)}
+                    placeholder="City, State"
                     className="flex-1 bg-transparent outline-none text-gray-700"
                   />
                 </div>
-                <button className="btn-primary px-8 py-3 rounded-xl text-white font-semibold shadow-lg">
-                  Search
+                <button 
+                  type="submit"
+                  disabled={isSearching}
+                  className="btn-primary px-8 py-3 rounded-xl text-white font-semibold shadow-lg disabled:opacity-50"
+                >
+                  {isSearching ? 'Searching...' : 'Search'}
                 </button>
               </div>
-            </div>
+            </form>
 
             {/* Categories */}
             <div className="flex flex-wrap gap-2 justify-center lg:justify-start">
               {categories.map((category) => (
                 <button
                   key={category}
+                  onClick={() => {
+                    setSearchQuery(category);
+                    router.push(`/search?q=${encodeURIComponent(category)}`);
+                  }}
                   className="px-4 py-2 bg-white/10 backdrop-blur-sm text-white rounded-full text-sm font-medium hover:bg-white/20 transition-colors border border-white/20"
                 >
                   {category}
