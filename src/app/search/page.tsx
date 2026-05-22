@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Search, MapPin, Star, Filter, ArrowLeft } from "lucide-react";
+import { Search, MapPin, Star, ArrowLeft } from "lucide-react";
+import { createClient } from "@/utils/supabase/client";
 import { BusinessListing } from "@/lib/database.types";
 
 export default function SearchPage() {
@@ -21,21 +22,49 @@ export default function SearchPage() {
     async function fetchResults() {
       setLoading(true);
       try {
-        const params = new URLSearchParams();
-        if (query) params.set("q", query);
-        if (city) params.set("city", city);
-        if (state) params.set("state", state);
-        if (category) params.set("category", category);
+        const supabase = createClient();
+        
+        let dbQuery = supabase
+          .from('businesses')
+          .select('*')
+          .eq('is_verified', true);
 
-        const response = await fetch(`/api/search?${params.toString()}`);
-        const data = await response.json();
+        // Text search across name, description, and category
+        if (query) {
+          dbQuery = dbQuery.or(
+            `name.ilike.%${query}%,description.ilike.%${query}%,category.ilike.%${query}%`
+          );
+        }
 
-        if (data.success) {
-          setBusinesses(data.businesses);
-        } else {
+        // Filter by category
+        if (category) {
+          dbQuery = dbQuery.eq('category', category);
+        }
+
+        // Filter by city
+        if (city) {
+          dbQuery = dbQuery.ilike('city', `%${city}%`);
+        }
+
+        // Filter by state
+        if (state) {
+          dbQuery = dbQuery.eq('state', state);
+        }
+
+        // Order by tier (VIP first), then rating
+        const { data, error: dbError } = await dbQuery
+          .order('tier', { ascending: false })
+          .order('rating', { ascending: false })
+          .limit(50);
+
+        if (dbError) {
+          console.error('Search error:', dbError);
           setError("Failed to load search results");
+        } else {
+          setBusinesses(data || []);
         }
       } catch (err) {
+        console.error('Search error:', err);
         setError("An error occurred while searching");
       } finally {
         setLoading(false);
