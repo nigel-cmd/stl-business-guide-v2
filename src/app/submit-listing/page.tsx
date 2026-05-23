@@ -1,0 +1,614 @@
+'use client';
+
+import { useState, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
+import Navbar from '../components/Navbar';
+import Footer from '../components/Footer';
+import { getListingPlans, getCategories, submitListing, signUp, signIn } from '@/lib/supabase';
+import type { ListingPlan, Category } from '@/lib/supabase';
+
+function SubmitListingForm() {
+  const searchParams = useSearchParams();
+  const planParam = searchParams.get('plan');
+
+  const [step, setStep] = useState(1);
+  const [plans, setPlans] = useState<ListingPlan[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [selectedPlan, setSelectedPlan] = useState<string | null>(planParam);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+  const [hasAccount, setHasAccount] = useState<boolean | null>(null);
+
+  // Form data
+  const [formData, setFormData] = useState({
+    // Account
+    email: '',
+    password: '',
+    full_name: '',
+    // Business
+    business_name: '',
+    description_short: '',
+    description_long: '',
+    phone: '',
+    business_email: '',
+    website_url: '',
+    // Location
+    address_line_1: '',
+    address_line_2: '',
+    city: '',
+    state: 'MO',
+    zip_code: '',
+    service_area: '',
+    // Categories
+    category_ids: [] as string[]
+  });
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  async function loadData() {
+    const [plansData, categoriesData] = await Promise.all([
+      getListingPlans(),
+      getCategories()
+    ]);
+    setPlans(plansData);
+    setCategories(categoriesData);
+  }
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleCategoryChange = (categoryId: string) => {
+    setFormData(prev => ({
+      ...prev,
+      category_ids: prev.category_ids.includes(categoryId)
+        ? prev.category_ids.filter(id => id !== categoryId)
+        : [...prev.category_ids, categoryId]
+    }));
+  };
+
+  const generateSlug = (name: string) => {
+    return name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    try {
+      let userId = null;
+
+      // Step 1: Create account if needed
+      if (!hasAccount) {
+        const { success: signupSuccess, error: signupError } = await signUp(
+          formData.email,
+          formData.password,
+          formData.full_name
+        );
+        if (!signupSuccess) {
+          throw signupError;
+        }
+      } else {
+        const { success: loginSuccess, error: loginError } = await signIn(
+          formData.email,
+          formData.password
+        );
+        if (!loginSuccess) {
+          throw loginError;
+        }
+      }
+
+      // Step 2: Submit listing
+      const { success: submitSuccess, error: submitError } = await submitListing({
+        business_name: formData.business_name,
+        slug: generateSlug(formData.business_name),
+        description_short: formData.description_short,
+        description_long: formData.description_long,
+        phone: formData.phone,
+        email: formData.business_email,
+        website_url: formData.website_url,
+        address_line_1: formData.address_line_1,
+        address_line_2: formData.address_line_2,
+        city: formData.city,
+        state: formData.state,
+        zip_code: formData.zip_code,
+        service_area: formData.service_area,
+        category_ids: formData.category_ids,
+        plan_id: selectedPlan!,
+        user_id: userId || null
+      });
+
+      if (!submitSuccess) {
+        throw submitError;
+      }
+
+      setSuccess(true);
+    } catch (err: any) {
+      setError(err.message || 'An error occurred. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (success) {
+    return (
+      <main className="min-h-screen bg-gray-50">
+        <Navbar />
+        <div className="max-w-2xl mx-auto px-4 py-16">
+          <div className="bg-white rounded-xl shadow-lg p-8 text-center">
+            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">Submission Received!</h1>
+            <p className="text-gray-600 mb-6">
+              Thank you for submitting your business listing. Our team will review it within 24-48 hours.
+              You will receive an email notification once your listing is approved.
+            </p>
+            <a
+              href="/"
+              className="inline-block bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition"
+            >
+              Return to Home
+            </a>
+          </div>
+        </div>
+        <Footer />
+      </main>
+    );
+  }
+
+  return (
+    <main className="min-h-screen bg-gray-50">
+      <Navbar />
+      
+      <div className="bg-gradient-to-r from-blue-600 to-blue-800 text-white py-12">
+        <div className="max-w-4xl mx-auto px-4">
+          <h1 className="text-3xl md:text-4xl font-bold mb-2">Submit Your Business Listing</h1>
+          <p className="text-blue-100">Join the St. Louis area's premier business directory</p>
+        </div>
+      </div>
+
+      <div className="max-w-4xl mx-auto px-4 py-8">
+        {/* Progress Steps */}
+        <div className="flex items-center justify-center mb-8">
+          <div className={`flex items-center ${step >= 1 ? 'text-blue-600' : 'text-gray-400'}`}>
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold ${
+              step >= 1 ? 'bg-blue-600 text-white' : 'bg-gray-200'
+            }`}>1</div>
+            <span className="ml-2 font-medium hidden sm:inline">Select Plan</span>
+          </div>
+          <div className={`w-16 h-0.5 mx-4 ${step >= 2 ? 'bg-blue-600' : 'bg-gray-200'}`} />
+          <div className={`flex items-center ${step >= 2 ? 'text-blue-600' : 'text-gray-400'}`}>
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold ${
+              step >= 2 ? 'bg-blue-600 text-white' : 'bg-gray-200'
+            }`}>2</div>
+            <span className="ml-2 font-medium hidden sm:inline">Account</span>
+          </div>
+          <div className={`w-16 h-0.5 mx-4 ${step >= 3 ? 'bg-blue-600' : 'bg-gray-200'}`} />
+          <div className={`flex items-center ${step >= 3 ? 'text-blue-600' : 'text-gray-400'}`}>
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold ${
+              step >= 3 ? 'bg-blue-600 text-white' : 'bg-gray-200'
+            }`}>3</div>
+            <span className="ml-2 font-medium hidden sm:inline">Business Info</span>
+          </div>
+        </div>
+
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6">
+            {error}
+          </div>
+        )}
+
+        {/* Step 1: Select Plan */}
+        {step === 1 && (
+          <div className="bg-white rounded-xl shadow-lg p-6 md:p-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-6">Choose Your Listing Plan</h2>
+            
+            <div className="grid md:grid-cols-3 gap-6">
+              {plans.map((plan) => (
+                <div
+                  key={plan.id}
+                  onClick={() => setSelectedPlan(plan.id)}
+                  className={`border-2 rounded-xl p-6 cursor-pointer transition-all ${
+                    selectedPlan === plan.id
+                      ? 'border-blue-600 bg-blue-50'
+                      : 'border-gray-200 hover:border-blue-300'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-xl font-bold text-gray-900">{plan.plan_name}</h3>
+                    {selectedPlan === plan.id && (
+                      <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center">
+                        <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="mb-4">
+                    <span className="text-3xl font-bold text-gray-900">
+                      ${plan.monthly_price}
+                    </span>
+                    <span className="text-gray-500">/month</span>
+                  </div>
+
+                  <ul className="space-y-2 text-sm text-gray-600">
+                    <li className="flex items-center">
+                      <svg className="w-4 h-4 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                      {plan.max_images} image{plan.max_images !== 1 ? 's' : ''}
+                    </li>
+                    <li className="flex items-center">
+                      <svg className={`w-4 h-4 mr-2 ${plan.allows_coupon ? 'text-green-500' : 'text-gray-300'}`} fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                      {plan.allows_coupon ? 'Coupons allowed' : 'No coupons'}
+                    </li>
+                    <li className="flex items-center">
+                      <svg className={`w-4 h-4 mr-2 ${plan.allows_video ? 'text-green-500' : 'text-gray-300'}`} fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                      {plan.allows_video ? 'Video support' : 'No video'}
+                    </li>
+                    <li className="flex items-center">
+                      <svg className={`w-4 h-4 mr-2 ${plan.allows_banner_ads ? 'text-green-500' : 'text-gray-300'}`} fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                      {plan.allows_banner_ads ? 'Banner ads' : 'No banner ads'}
+                    </li>
+                  </ul>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-8 flex justify-end">
+              <button
+                onClick={() => selectedPlan && setStep(2)}
+                disabled={!selectedPlan}
+                className="bg-blue-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-blue-700 transition disabled:bg-gray-300 disabled:cursor-not-allowed"
+              >
+                Continue
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Step 2: Account */}
+        {step === 2 && (
+          <div className="bg-white rounded-xl shadow-lg p-6 md:p-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-6">Create Your Account</h2>
+
+            {hasAccount === null && (
+              <div className="flex gap-4 mb-6">
+                <button
+                  onClick={() => setHasAccount(false)}
+                  className="flex-1 border-2 border-blue-600 text-blue-600 py-4 rounded-lg font-semibold hover:bg-blue-50 transition"
+                >
+                  I need to create an account
+                </button>
+                <button
+                  onClick={() => setHasAccount(true)}
+                  className="flex-1 border-2 border-gray-300 text-gray-700 py-4 rounded-lg font-semibold hover:bg-gray-50 transition"
+                >
+                  I already have an account
+                </button>
+              </div>
+            )}
+
+            {hasAccount !== null && (
+              <form onSubmit={(e) => { e.preventDefault(); setStep(3); }}>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+                    <input
+                      type="email"
+                      name="email"
+                      value={formData.email}
+                      onChange={handleInputChange}
+                      required
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="you@example.com"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                    <input
+                      type="password"
+                      name="password"
+                      value={formData.password}
+                      onChange={handleInputChange}
+                      required
+                      minLength={6}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="••••••••"
+                    />
+                  </div>
+
+                  {!hasAccount && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                      <input
+                        type="text"
+                        name="full_name"
+                        value={formData.full_name}
+                        onChange={handleInputChange}
+                        required
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="John Smith"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-8 flex justify-between">
+                  <button
+                    type="button"
+                    onClick={() => { setHasAccount(null); setStep(1); }}
+                    className="text-gray-600 hover:text-gray-800 font-medium"
+                  >
+                    ← Back
+                  </button>
+                  <button
+                    type="submit"
+                    className="bg-blue-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-blue-700 transition"
+                  >
+                    Continue
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        )}
+
+        {/* Step 3: Business Information */}
+        {step === 3 && (
+          <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-lg p-6 md:p-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-6">Business Information</h2>
+
+            <div className="space-y-6">
+              {/* Business Name */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Business Name *</label>
+                <input
+                  type="text"
+                  name="business_name"
+                  value={formData.business_name}
+                  onChange={handleInputChange}
+                  required
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Your Business Name"
+                />
+              </div>
+
+              {/* Categories */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Categories *</label>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                  {categories.map((category) => (
+                    <label
+                      key={category.id}
+                      className={`flex items-center p-3 border rounded-lg cursor-pointer transition ${
+                        formData.category_ids.includes(category.id)
+                          ? 'border-blue-600 bg-blue-50'
+                          : 'border-gray-200 hover:border-blue-300'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={formData.category_ids.includes(category.id)}
+                        onChange={() => handleCategoryChange(category.id)}
+                        className="sr-only"
+                      />
+                      <span className="text-sm">{category.name}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Description */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Short Description *</label>
+                <input
+                  type="text"
+                  name="description_short"
+                  value={formData.description_short}
+                  onChange={handleInputChange}
+                  required
+                  maxLength={200}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Brief description of your business (max 200 characters)"
+                />
+                <p className="text-xs text-gray-500 mt-1">{formData.description_short.length}/200 characters</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Full Description</label>
+                <textarea
+                  name="description_long"
+                  value={formData.description_long}
+                  onChange={handleInputChange}
+                  rows={4}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Detailed description of your products/services"
+                />
+              </div>
+
+              {/* Contact Info */}
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Phone *</label>
+                  <input
+                    type="tel"
+                    name="phone"
+                    value={formData.phone}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="(314) 555-0123"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Business Email *</label>
+                  <input
+                    type="email"
+                    name="business_email"
+                    value={formData.business_email}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="contact@yourbusiness.com"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Website</label>
+                <input
+                  type="url"
+                  name="website_url"
+                  value={formData.website_url}
+                  onChange={handleInputChange}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="https://www.yourbusiness.com"
+                />
+              </div>
+
+              {/* Address */}
+              <div className="border-t pt-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Business Address</h3>
+                
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Street Address *</label>
+                    <input
+                      type="text"
+                      name="address_line_1"
+                      value={formData.address_line_1}
+                      onChange={handleInputChange}
+                      required
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="123 Main Street"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Apt, Suite, etc.</label>
+                    <input
+                      type="text"
+                      name="address_line_2"
+                      value={formData.address_line_2}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Suite 100"
+                    />
+                  </div>
+
+                  <div className="grid md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">City *</label>
+                      <input
+                        type="text"
+                        name="city"
+                        value={formData.city}
+                        onChange={handleInputChange}
+                        required
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="St. Louis"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">State *</label>
+                      <select
+                        name="state"
+                        value={formData.state}
+                        onChange={handleInputChange}
+                        required
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      >
+                        <option value="MO">Missouri</option>
+                        <option value="IL">Illinois</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">ZIP Code *</label>
+                      <input
+                        type="text"
+                        name="zip_code"
+                        value={formData.zip_code}
+                        onChange={handleInputChange}
+                        required
+                        pattern="[0-9]{5}(-[0-9]{4})?"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="63101"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Service Area</label>
+                    <input
+                      type="text"
+                      name="service_area"
+                      value={formData.service_area}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="e.g., St. Louis County, St. Charles County"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-8 flex justify-between">
+              <button
+                type="button"
+                onClick={() => setStep(2)}
+                className="text-gray-600 hover:text-gray-800 font-medium"
+              >
+                ← Back
+              </button>
+              <button
+                type="submit"
+                disabled={loading || formData.category_ids.length === 0}
+                className="bg-blue-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-blue-700 transition disabled:bg-gray-300 disabled:cursor-not-allowed"
+              >
+                {loading ? 'Submitting...' : 'Submit Listing'}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+
+      <Footer />
+    </main>
+  );
+}
+
+export default function SubmitListingPage() {
+  return (
+    <Suspense fallback={
+      <main className="min-h-screen bg-gray-50">
+        <Navbar />
+        <div className="flex justify-center py-12">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        </div>
+        <Footer />
+      </main>
+    }>
+      <SubmitListingForm />
+    </Suspense>
+  );
+}

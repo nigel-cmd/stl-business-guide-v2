@@ -2,17 +2,17 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Menu, X, Phone, Mail } from "lucide-react";
+import { Menu, X, Phone, Search } from "lucide-react";
 
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
 
   const navLinks = [
     { name: "Home", href: "/" },
-    { name: "Businesses", href: "#businesses" },
-    { name: "Pricing", href: "#pricing" },
-    { name: "About", href: "#about" },
-    { name: "Contact", href: "#contact" },
+    { name: "Businesses", href: "/listings" },
+    { name: "Pricing", href: "/pricing" },
+    { name: "About", href: "/about" },
+    { name: "Contact", href: "/contact" },
   ];
 
   return (
@@ -49,6 +49,13 @@ export default function Navbar() {
 
           {/* CTA Buttons */}
           <div className="hidden md:flex items-center space-x-4">
+            <Link
+              href="/search"
+              className="flex items-center space-x-2 text-gray-600 hover:text-[#54afe6] transition-colors"
+            >
+              <Search className="w-4 h-4" />
+              <span className="font-medium">Search</span>
+            </Link>
             <a
               href="tel:314-886-8084"
               className="flex items-center space-x-2 text-gray-600 hover:text-[#54afe6] transition-colors"
@@ -57,8 +64,8 @@ export default function Navbar() {
               <span className="font-medium">314-886-8084</span>
             </a>
             <Link
-              href="#pricing"
-              className="btn-primary px-6 py-2.5 rounded-full text-white font-semibold shadow-lg"
+              href="/submit-listing"
+              className="bg-gradient-to-r from-[#54afe6] to-[#bb7ce4] px-6 py-2.5 rounded-full text-white font-semibold shadow-lg hover:shadow-xl transition"
             >
               List Your Business
             </Link>
@@ -89,6 +96,14 @@ export default function Navbar() {
               </Link>
             ))}
             <div className="pt-4 space-y-3">
+              <Link
+                href="/search"
+                onClick={() => setIsOpen(false)}
+                className="flex items-center space-x-2 px-3 py-2 text-gray-600"
+              >
+                <Search className="w-4 h-4" />
+                <span>Search</span>
+              </Link>
               <a
                 href="tel:314-886-8084"
                 className="flex items-center space-x-2 px-3 py-2 text-gray-600"
@@ -97,9 +112,9 @@ export default function Navbar() {
                 <span>314-886-8084</span>
               </a>
               <Link
-                href="#pricing"
+                href="/submit-listing"
                 onClick={() => setIsOpen(false)}
-                className="block w-full text-center btn-primary px-6 py-3 rounded-full text-white font-semibold"
+                className="block w-full text-center bg-gradient-to-r from-[#54afe6] to-[#bb7ce4] px-6 py-3 rounded-full text-white font-semibold"
               >
                 List Your Business
               </Link>
